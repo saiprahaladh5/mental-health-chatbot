@@ -177,7 +177,7 @@ with st.sidebar:
     selected = st.selectbox("Select chat", options=chat_ids, index=idx, format_func=_fmt)
     if selected != st.session_state.current_chat_id:
         st.session_state.current_chat_id = selected
-        st.experimental_rerun()
+        st.rerun()
     col1, col2 = st.columns(2)
     with col1:
         if st.button("➕ New chat"):
@@ -185,7 +185,7 @@ with st.sidebar:
             st.session_state.chats[cid] = {"title": f"Chat {len(st.session_state.chats)+1}","created_at": datetime.utcnow().isoformat(),"messages": []}
             st.session_state.current_chat_id = cid
             save_chats()
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         if st.button("🗑️ Delete chat"):
             del st.session_state.chats[st.session_state.current_chat_id]
@@ -196,7 +196,7 @@ with st.sidebar:
                 st.session_state.chats[cid] = {"title": "Chat 1","created_at": datetime.utcnow().isoformat(),"messages": []}
                 st.session_state.current_chat_id = cid
             save_chats()
-            st.experimental_rerun()
+            st.rerun()
     new_title = st.text_input("Rename current chat", value=current_chat().get("title","Untitled"))
     if new_title and new_title != current_chat().get("title"):
         current_chat()["title"] = new_title
@@ -214,7 +214,7 @@ with tab1:
     with c2:
         do_clear = st.button("Clear")
     if do_clear:
-        st.experimental_rerun()
+        st.rerun()
     if do_reply and journal.strip():
         emo, conf, scores = detect_emotion_9(journal)
         history = [{"role": m["role"], "content": m["content"]} for m in current_chat()["messages"][-6:]]
