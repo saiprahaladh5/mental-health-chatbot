@@ -9,7 +9,7 @@ from together import Together
 st.set_page_config(page_title="Companion • Coach • Assistant", layout="centered")
 st.markdown("""
 <style>
-:root{--bg:#0b1220;--panel:#0f172a;--border:#1f2937;--text:#e5e7eb;--muted:#94a3b8;--in:#0f172a;--out:#2563eb;--outb:#1e40af}
+:root{--bg:#0b1220;--panel:#0f172a;--border:#1f2937;--text:#e5e7eb;--muted:#94a3b8;--in:#101827;--out:#2563eb;--outb:#1e40af}
 html, body .main { background:var(--bg)!important; color:var(--text)!important }
 .block-container{max-width:900px;padding-top:10px}
 .appbar{background:linear-gradient(135deg,#0ea5e9 0%,#22c55e 100%);color:#062332;border-radius:18px;padding:12px 16px;font-weight:700;box-shadow:0 8px 30px rgba(0,0,0,.25);margin-bottom:12px}
@@ -22,11 +22,11 @@ html, body .main { background:var(--bg)!important; color:var(--text)!important }
 .meta{font-size:.78rem;color:#94a3b8;margin-top:6px}
 </style>
 """, unsafe_allow_html=True)
-st.markdown('<div class="appbar">🧭 Friend-coach vibe • No scripts • Holy line only for emotions</div>', unsafe_allow_html=True)
+st.markdown('<div class="appbar">🤝 Friend-Coach vibe • No scripts • Holy line only for emotions</div>', unsafe_allow_html=True)
 
 EMOJI = {"joy":"😊","sadness":"😢","anger":"😠","fear":"😟","disgust":"🤢","surprise":"😮","love":"💖","optimism":"🌤️","neutral":"😐"}
 
-# ===== Emotion (for coach only) =====
+# ===== Emotion model (coach only) =====
 @st.cache_resource(show_spinner=False)
 def _load_emotion_model():
     name = "SamLowe/roberta-base-go_emotions"
@@ -51,6 +51,7 @@ def _load_emotion_model():
             if lab in fine: idx[g].append(i); placed=True; break
         if not placed: idx["neutral"].append(i)
     return tok, mdl, idx
+
 try:
     TOKENIZER, EMO_MODEL, IDX = _load_emotion_model(); MODEL_OK=True
 except Exception:
@@ -69,8 +70,10 @@ def detect_emotion_9(text:str):
 
 # ===== LLM =====
 API_KEY = os.getenv("TOGETHER_API_KEY")
-if not API_KEY: st.error("TOGETHER_API_KEY missing."); st.stop()
+if not API_KEY:
+    st.error("TOGETHER_API_KEY missing."); st.stop()
 CLIENT = Together(api_key=API_KEY)
+
 def llm(messages, model="meta-llama/Llama-3.3-70B-Instruct-Turbo", max_tokens=520, temperature=0.55, top_p=0.9):
     def call(m):
         r = CLIENT.chat.completions.create(model=m, messages=messages, max_tokens=max_tokens, temperature=temperature, top_p=top_p, stream=False)
@@ -93,23 +96,25 @@ GREETINGS = {"hi","hello","hey","hola","yo","sup","hai","hii","hi there","hello 
 TRAVEL = {"travel","trip","vacation","holiday","destination","destinations","place","places","country","city","visit","itinerary","spots","spot"}
 LIST_WORDS = {"top","best","list","recommend","suggest","ideas","options","give me","show me","list down"}
 CODE   = {"python","code","bug","error","function","class","api","sql","javascript","react","streamlit"}
-COMPARE_WORDS = {" vs ","versus","difference between","compare","against"}
+COMPARE = {" vs ","versus","difference between","compare","against"}
+
 def is_greeting(t:str)->bool: return t.strip().lower() in GREETINGS
-def contains_any(text, vocab): return any(w in text.lower() for w in vocab)
+def has_any(text, vocab): return any(w in text.lower() for w in vocab)
 def extract_topn(text, default=5):
     m = re.search(r"\btop\s*(\d{1,2})\b", text.lower())
     if m:
         try: return max(1, min(20, int(m.group(1))))
         except: pass
     return default
+
 def detect_intent(text:str)->str:
     t=text.lower()
     if is_greeting(t): return "greeting"
-    if contains_any(t, TRAVEL) and contains_any(t, LIST_WORDS): return "travel_list"
-    if contains_any(t, TRAVEL): return "travel_general"
-    if contains_any(t, CODE): return "coding"
-    if contains_any(t, COMPARE_WORDS): return "compare"
-    if contains_any(t, LIST_WORDS): return "general_list"
+    if has_any(t, TRAVEL) and has_any(t, LIST_WORDS): return "travel_list"
+    if has_any(t, TRAVEL): return "travel_general"
+    if has_any(t, CODE): return "coding"
+    if has_any(t, COMPARE): return "compare"
+    if has_any(t, LIST_WORDS): return "general_list"
     if any(k in t for k in ["i feel","i'm feeling","im feeling","sad","lonely","anxious","depressed","stress","stressed","overwhelmed","angry","confused","frustrated","heartbroken","afraid","scared"]):
         return "coach"
     return "general"
@@ -124,8 +129,8 @@ def holy_snippet(emotion:str):
     if e in {"optimism","joy","relief","gratitude"}: return '“Be joyful in hope.” (Romans 12:12)'
     return '“Be steadfast in yoga.” (Bhagavad-Gita 2:48)'
 
-# ===== HARD BAN in coach (kills the clichés) + dedupe =====
-BANNED_PATTERNS = [
+# ===== HARD BAN in coach (kills clichéd scripts) =====
+BANNED = [
     r"(?i)\btry\s*now\b", r"(?i)\bnext\s*tiny\s*step\b",
     r"(?i)\b4[-\s]?4[-\s]?6\b", r"(?i)\bbreath(e|ing|work)?\b", r"(?i)\binhale\b", r"(?i)\bexhale\b",
     r"(?i)\bdeep\s*breath\b", r"(?i)\bground(ing|ed)\b", r"(?i)\bgratitude\b",
@@ -133,50 +138,33 @@ BANNED_PATTERNS = [
     r"(?i)\btake\s*(\d+|\w+)\s*(seconds?|minutes?)\b",
 ]
 def sanitize(text:str)->str:
-    # remove lines containing banned content
-    lines = [ln for ln in text.splitlines() if not any(re.search(p, ln) for p in BANNED_PATTERNS)]
+    lines = [ln for ln in text.splitlines() if not any(re.search(p, ln) for p in BANNED)]
     out = "\n".join(lines).strip()
-    for p in BANNED_PATTERNS: out = re.sub(p, "", out)
-    out = re.sub(r"\n\s*\n\s*\n+", "\n\n", out).strip()
-    return out
-def too_similar(a:str,b:str)->bool:
-    if not a or not b: return False
-    wa=set(re.findall(r"\w+", a.lower())); wb=set(re.findall(r"\w+", b.lower()))
-    if not wa or not wb: return False
-    j=len(wa & wb)/max(1,len(wa|wb))
-    return j>0.85
+    for p in BANNED: out = re.sub(p, "", out)
+    return re.sub(r"\n\s*\n\s*\n+", "\n\n", out).strip()
 
-# ===== System prompts =====
+# ===== Prompts =====
 def sys_greeting():  return "One-line greeting and ask what they want help with. 10 words max. No emojis."
-def sys_travel_list(n): return (f"Return exactly {n} items as a markdown list. Each: **City, Country** — why | Best season | Vibe | Budget ($/$$/$$$). No intro/outro. No coaching.")
+def sys_travel_list(n): return (f"Return exactly {n} items as a markdown list. Each: **City, Country** — 1-line why | Best season | Vibe | Budget ($/$$/$$$). No intro/outro. No coaching.")
 def sys_travel_general(): return "Concrete places, seasons, and a sample 3-day outline. No quotes. No coaching."
 def sys_coding():  return "Senior engineer. Minimal runnable example first, then brief explanation + pitfalls. No filler."
 def sys_compare(): return "Compact table: Option | Summary | Pros | Cons | Best for. Then a decisive verdict."
 def sys_general_list(n): return f"Return exactly {n} punchy one-line bullets tailored to the request. No intro/outro."
 def sys_general(): return "Answer directly. Use bullets/steps/table when helpful. Be specific."
-
-# === Coach styles ===
-def sys_coach_conversational():
+def sys_coach_convo(): 
     return ("Trusted friend & coach. One short paragraph (70–110 words), natural and human. "
             "Validate what they said, reflect it in your own words, and offer 1–2 concrete ideas that fit their situation. "
             "Absolutely avoid scripts, breathwork, counting, 'try now', journaling prompts, or gratitude checklists. "
-            "No bullet lists unless the user asks for steps. No quotes (we will add a holy line after).")
-def sys_coach_structured():
-    return ("Coach with structure. Two short paragraphs max. First: validation + crisp insight tailored to the user’s words. "
-            "Second: a 3-step practical plan, each step ≤ 12 words. "
-            "Forbidden: breathwork, 'try now', counting, gratitude lists, journaling prompts. No quotes (we append holy line).")
+            "No lists unless the user asks for steps. No quotes (a separate holy line will be appended).")
 
-# ===== State =====
+# ===== State & render =====
 if "chat" not in st.session_state:
-    st.session_state.chat = [("assistant","Hey—I’m here. What do you want help with today?","neutral")]
+    st.session_state.chat = [("assistant","Hey — I’m here. What do you want help with today?","neutral")]
 
-# Controls
-colA, colB, colC = st.columns([1,1,1.4])
+colA, colB = st.columns([1,1])
 mode = colA.selectbox("Mode", ["Auto (router)", "Companion", "Coach"], index=0)
-coach_style = colB.selectbox("Coach style", ["Conversational", "Structured"], index=0)
-model_choice = colC.selectbox("Model", ["meta-llama/Llama-3.3-70B-Instruct-Turbo","meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"], index=0)
+model_choice = colB.selectbox("Model", ["meta-llama/Llama-3.3-70B-Instruct-Turbo","meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"], index=0)
 
-# Render chat
 st.markdown('<div class="chat">', unsafe_allow_html=True)
 for role, content, emo in st.session_state.chat:
     cls = "user" if role=="user" else "assistant"
@@ -187,35 +175,24 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 prompt = st.chat_input("Talk like with a friend. Ask tasks (travel, coding) or share how you feel…")
 
-def llm_call(msgs, **kw):
-    ans = CLIENT.chat.completions.create(model=kw.get("model", model_choice), messages=msgs,
-        max_tokens=kw.get("max_tokens",520), temperature=kw.get("temperature",0.55), top_p=kw.get("top_p",0.9), stream=False)
-    return ans.choices[0].message.content.strip()
+def respond(text:str):
+    t = text.strip()
 
-def route_and_reply(text:str):
-    t=text.strip()
     # Companion: warm chat (no therapy)
     if mode == "Companion":
         sys = ("Warm, natural companion. Keep replies under 90 words. Be curious and supportive. "
                "No therapy instructions, no breathwork, no quotes, no holy references. "
                "If the user asks for tasks, answer directly and concise.")
-        msgs = [{"role":"system","content":sys}] + [{"role":r,"content":c} for (r,c,_e) in st.session_state.chat[-8:]] + [{"role":"user","content":t}]
-        out = llm_call(msgs, max_tokens=360, temperature=0.65)
-        st.session_state.chat.append(("assistant", out, None))
+        msgs = [{"role":"system","content":sys}] + [{"role":"user","content":t}]
+        st.session_state.chat.append(("assistant", llm(msgs, model=model_choice, max_tokens=360, temperature=0.65), None))
         return
 
-    # Coach: therapist friend style + holy line
+    # Coach: conversational + holy line; sanitized
     if mode == "Coach":
         emo, _, _ = detect_emotion_9(t)
-        sys = sys_coach_conversational() if coach_style=="Conversational" else sys_coach_structured()
-        msgs = [{"role":"system","content":sys}] + [{"role":r,"content":c} for (r,c,_e) in st.session_state.chat[-8:]] + [{"role":"user","content": t + f" [emotion: {emo}]"}]
-        raw = llm_call(msgs, max_tokens=420, temperature=0.5)
+        msgs = [{"role":"system","content":sys_coach_convo()}, {"role":"user","content": t + f" [emotion: {emo}]"}]
+        raw = llm(msgs, model=model_choice, max_tokens=420, temperature=0.5)
         clean = sanitize(raw)
-        # avoid repeating the last assistant message
-        prev = next((c for (r,c,_e) in reversed(st.session_state.chat) if r=="assistant"), "")
-        if too_similar(clean, prev):
-            msgs2 = [{"role":"system","content":sys + " Rephrase with different wording; keep meaning the same."}] + [{"role":"user","content": t + f" [emotion: {emo}]"}]
-            clean = sanitize(llm_call(msgs2, max_tokens=420, temperature=0.65))
         holy = holy_snippet(emo)
         if holy: clean = clean.strip() + f"\n\n— {holy}"
         st.session_state.chat.append(("assistant", clean, emo))
@@ -224,46 +201,32 @@ def route_and_reply(text:str):
     # Auto (router)
     intent = detect_intent(t)
     if intent == "greeting":
-        msgs = [{"role":"system","content":sys_greeting()},{"role":"user","content": t}]
-        st.session_state.chat.append(("assistant", llm_call(msgs, max_tokens=32, temperature=0.2), None))
+        st.session_state.chat.append(("assistant", llm([{"role":"system","content":sys_greeting()}, {"role":"user","content":t}], model=model_choice, max_tokens=32, temperature=0.2), None))
     elif intent == "travel_list":
         n = extract_topn(t, 5)
-        msgs = [{"role":"system","content":sys_travel_list(n)}, {"role":"user","content": t}]
-        st.session_state.chat.append(("assistant", llm_call(msgs, max_tokens=340, temperature=0.35), None))
+        st.session_state.chat.append(("assistant", llm([{"role":"system","content":sys_travel_list(n)}, {"role":"user","content":t}], model=model_choice, max_tokens=340, temperature=0.35), None))
     elif intent == "travel_general":
-        msgs = [{"role":"system","content":sys_travel_general()}] + [{"role":r,"content":c} for (r,c,_e) in st.session_state.chat[-6:]] + [{"role":"user","content": t}]
-        st.session_state.chat.append(("assistant", llm_call(msgs, max_tokens=420, temperature=0.45), None))
+        st.session_state.chat.append(("assistant", llm([{"role":"system","content":sys_travel_general()}, {"role":"user","content":t}], model=model_choice, max_tokens=420, temperature=0.45), None))
     elif intent == "coding":
-        msgs = [{"role":"system","content":sys_coding()}] + [{"role":r,"content":c} for (r,c,_e) in st.session_state.chat[-6:]] + [{"role":"user","content": t}]
-        st.session_state.chat.append(("assistant", llm_call(msgs, max_tokens=580, temperature=0.3), None))
+        st.session_state.chat.append(("assistant", llm([{"role":"system","content":sys_coding()}, {"role":"user","content":t}], model=model_choice, max_tokens=580, temperature=0.3), None))
     elif intent == "compare":
-        msgs = [{"role":"system","content":sys_compare()}, {"role":"user","content": t}]
-        st.session_state.chat.append(("assistant", llm_call(msgs, max_tokens=420, temperature=0.35), None))
+        st.session_state.chat.append(("assistant", llm([{"role":"system","content":sys_compare()}, {"role":"user","content":t}], model=model_choice, max_tokens=420, temperature=0.35), None))
     elif intent == "general_list":
         n = extract_topn(t, 5)
-        msgs = [{"role":"system","content":sys_general_list(n)}, {"role":"user","content": t}]
-        st.session_state.chat.append(("assistant", llm_call(msgs, max_tokens=300, temperature=0.35), None))
+        st.session_state.chat.append(("assistant", llm([{"role":"system","content":sys_general_list(n)}, {"role":"user","content":t}], model=model_choice, max_tokens=300, temperature=0.35), None))
     elif intent == "coach":
         emo, _, _ = detect_emotion_9(t)
-        sys = sys_coach_conversational()
-        msgs = [{"role":"system","content":sys}] + [{"role":r,"content":c} for (r,c,_e) in st.session_state.chat[-8:]] + [{"role":"user","content": t + f" [emotion: {emo}]"}]
-        raw = llm_call(msgs, max_tokens=420, temperature=0.5)
+        raw = llm([{"role":"system","content":sys_coach_convo()}, {"role":"user","content": t + f" [emotion: {emo}]"}], model=model_choice, max_tokens=420, temperature=0.5)
         clean = sanitize(raw)
-        prev = next((c for (r,c,_e) in reversed(st.session_state.chat) if r=="assistant"), "")
-        if too_similar(clean, prev):
-            msgs2 = [{"role":"system","content":sys + " Rephrase with different wording; keep meaning the same."}] + [{"role":"user","content": t + f" [emotion: {emo}]"}]
-            clean = sanitize(llm_call(msgs2, max_tokens=420, temperature=0.65))
         holy = holy_snippet(emo)
         if holy: clean = clean.strip() + f"\n\n— {holy}"
         st.session_state.chat.append(("assistant", clean, emo))
     else:
-        msgs = [{"role":"system","content":sys_general()}] + [{"role":r,"content":c} for (r,c,_e) in st.session_state.chat[-6:]] + [{"role":"user","content": t}]
-        st.session_state.chat.append(("assistant", llm_call(msgs, max_tokens=460, temperature=0.5), None))
+        st.session_state.chat.append(("assistant", llm([{"role":"system","content":sys_general()}, {"role":"user","content":t}], model=model_choice, max_tokens=460, temperature=0.5), None))
 
-# Handle input
 if prompt is not None:
-    txt = (prompt or "").strip()
-    if txt:
-        st.session_state.chat.append(("user", txt, None))
-        route_and_reply(txt)
+    text = (prompt or "").strip()
+    if text:
+        st.session_state.chat.append(("user", text, None))
+        respond(text)
         st.rerun()
