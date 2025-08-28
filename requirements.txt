@@ -1,7 +1,8 @@
-﻿streamlit>=1.33,<2
+streamlit>=1.33,<2
 together==1.5.25
 transformers==4.55.4
 tokenizers==0.21.0
-torch==2.2.2        # CPU wheel available for Python 3.11
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
 scipy
 pandas
