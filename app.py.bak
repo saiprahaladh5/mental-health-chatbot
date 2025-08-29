@@ -1,20 +1,4 @@
-﻿import streamlit as st
-
-st.set_page_config(page_title="Mental Health Companion", page_icon="🫶", layout="centered")
-
-st.markdown("""
-<style>
-.stApp { background: #121417; }
-.stMarkdown, .stText, .stChatMessage, div[data-testid="stChatMessageContent"] { color: #FFFFFF !important; }
-.stMarkdown p, .stMarkdown li, .stMarkdown span { color: #FFFFFF !important; }
-::placeholder { color: #cfd3d8 !important; }
-.block-container { padding-top: 1.25rem; }
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🫶 Mental Health Companion Chatbot")
-st.markdown("Your supportive AI friend — talk freely, reflect, and feel better 🌿")
-import os, re, time, random, html, base64
+﻿import os, re, time, random, html, base64
 import streamlit as st
 
 MODEL_OK = True
@@ -530,4 +514,3 @@ def apply_canvas():
 # Call once near the top of your app (after imports)
 apply_canvas()
 # ===== END BEAUTY CANVAS =====
-
